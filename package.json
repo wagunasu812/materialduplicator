@@ -1,15 +1,15 @@
 ﻿{
   "name": "com.wagunasu812.materialduplicator",
   "displayName": "Material Duplicator",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "unity": "2019.4",
-  "description": "VRChatアバター対応モデル製作者向け マテリアル・テクスチャ複製 & 自動アサインツール",
+  "description": "VRChatアバター対応モデル製作者向け マテリアル・テクスチャ複製 & 自動アサインツール / フォルダごと複製対応",
   "author": {
     "name": "wagunasu812",
     "url": "https://github.com/wagunasu812"
   },
   "vpmDependencies": {},
-  "url": "https://github.com/wagunasu812/materialduplicator/releases/download/v1.0.0/com.wagunasu812.materialduplicator-1.0.0.zip",
+  "url": "https://github.com/wagunasu812/materialduplicator/releases/download/v1.1.0/com.wagunasu812.materialduplicator-1.1.0.zip",
   "license": "MIT",
   "keywords": ["vrchat", "material", "texture", "editor-tool"]
 }
