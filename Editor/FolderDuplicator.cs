@@ -230,7 +230,8 @@ public class FolderDuplicator : EditorWindow
         if (dstRoot.StartsWith(srcRoot + "/"))
         { EditorUtility.DisplayDialog("エラー", "複製先が複製元の子フォルダになっています", "OK"); return; }
 
-        var texMap = new Dictionary<string, string>(); // srcPath → dstPath
+        // テクスチャ + マテリアル 両方のパスマップ: srcPath → dstPath
+        var fileMap = new Dictionary<string, string>();
         int copiedTex = 0, skippedTex = 0;
 
         // Phase 1: テクスチャをコピー
@@ -242,7 +243,7 @@ public class FolderDuplicator : EditorWindow
 
             string dstPath = ToDstPath(srcPath, srcRoot, dstRoot);
             EnsureFolderExists(Path.GetDirectoryName(dstPath).Replace("\\", "/"));
-            texMap[srcPath] = dstPath;
+            fileMap[srcPath] = dstPath;
 
             if (AssetDatabase.LoadAssetAtPath<Object>(dstPath) != null)
             { Log("SKIP  [Tex] " + Path.GetFileName(dstPath)); skippedTex++; }
@@ -252,21 +253,7 @@ public class FolderDuplicator : EditorWindow
             { Log("ERROR [Tex] " + srcPath); }
         }
 
-        // テクスチャのインポート完了を待つ
-        AssetDatabase.Refresh();
-
-        // テクスチャのGUIDマップを構築: srcGUID → dstGUID
-        var guidMap = new Dictionary<string, string>();
-        foreach (var kv in texMap)
-        {
-            string srcGuid = AssetDatabase.AssetPathToGUID(kv.Key);
-            string dstGuid = AssetDatabase.AssetPathToGUID(kv.Value);
-            if (!string.IsNullOrEmpty(srcGuid) && !string.IsNullOrEmpty(dstGuid) && srcGuid != dstGuid)
-                guidMap[srcGuid] = dstGuid;
-        }
-        Log(string.Format("GUIDマップ: {0} 件", guidMap.Count));
-
-        // Phase 2: マテリアルをコピーしてGUIDを直接置換
+        // Phase 2: マテリアルをコピー（GUID置換はまだしない）
         int copiedMat = 0, skippedMat = 0;
 
         string[] matGuids = AssetDatabase.FindAssets("t:Material", new[] { srcRoot });
@@ -278,6 +265,7 @@ public class FolderDuplicator : EditorWindow
 
             string dstPath = ToDstPath(srcPath, srcRoot, dstRoot);
             EnsureFolderExists(Path.GetDirectoryName(dstPath).Replace("\\", "/"));
+            fileMap[srcPath] = dstPath;
 
             if (AssetDatabase.LoadAssetAtPath<Object>(dstPath) != null)
             { Log("SKIP  [Mat] " + Path.GetFileName(dstPath)); skippedMat++; continue; }
@@ -287,20 +275,36 @@ public class FolderDuplicator : EditorWindow
 
             Log("OK    [Mat] " + Path.GetFileName(dstPath));
             copiedMat++;
+        }
 
-            // コピーした .mat ファイルのテクスチャGUIDを複製先GUIDで直接置換
-            if (guidMap.Count > 0)
+        // テクスチャ + マテリアル全ファイルのインポートを待つ
+        AssetDatabase.Refresh();
+
+        // テクスチャ＋マテリアルの GUIDマップを構築: srcGUID → dstGUID
+        var guidMap = new Dictionary<string, string>();
+        foreach (var kv in fileMap)
+        {
+            string srcGuid = AssetDatabase.AssetPathToGUID(kv.Key);
+            string dstGuid = AssetDatabase.AssetPathToGUID(kv.Value);
+            if (!string.IsNullOrEmpty(srcGuid) && !string.IsNullOrEmpty(dstGuid) && srcGuid != dstGuid)
+                guidMap[srcGuid] = dstGuid;
+        }
+        Log(string.Format("GUIDマップ: {0} 件（テクスチャ＋マテリアル）", guidMap.Count));
+
+        // Phase 3: 複製した全 .mat ファイルの GUID を一括置換（テクスチャ参照 + m_Parent 等のマテリアル参照）
+        if (guidMap.Count > 0)
+        {
+            foreach (var kv in fileMap)
             {
-                string absPath = Application.dataPath + dstPath.Substring("Assets".Length);
-                if (File.Exists(absPath))
-                {
-                    string text = File.ReadAllText(absPath);
-                    string replaced = text;
-                    foreach (var kv in guidMap)
-                        replaced = replaced.Replace("guid: " + kv.Key, "guid: " + kv.Value);
-                    if (replaced != text)
-                        File.WriteAllText(absPath, replaced);
-                }
+                if (!kv.Key.EndsWith(".mat", System.StringComparison.OrdinalIgnoreCase)) continue;
+                string absPath = Application.dataPath + kv.Value.Substring("Assets".Length);
+                if (!File.Exists(absPath)) continue;
+                string text = File.ReadAllText(absPath);
+                string replaced = text;
+                foreach (var g in guidMap)
+                    replaced = replaced.Replace("guid: " + g.Key, "guid: " + g.Value);
+                if (replaced != text)
+                    File.WriteAllText(absPath, replaced);
             }
         }
 
