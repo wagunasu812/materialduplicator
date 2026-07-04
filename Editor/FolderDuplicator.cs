@@ -10,7 +10,7 @@ namespace MaterialDuplicatorTool
 
 public class FolderDuplicator : EditorWindow
 {
-    private const string Version = "1.1.1";
+    private const string Version = "1.1.2";
 
     private DefaultAsset sourceFolderAsset;
 
