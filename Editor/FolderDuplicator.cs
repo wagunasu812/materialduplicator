@@ -10,7 +10,7 @@ namespace MaterialDuplicatorTool
 
 public class FolderDuplicator : EditorWindow
 {
-    private const string Version = "1.1.2";
+    private const string Version = "1.1.3";
 
     private DefaultAsset sourceFolderAsset;
 
@@ -230,9 +230,10 @@ public class FolderDuplicator : EditorWindow
         if (dstRoot.StartsWith(srcRoot + "/"))
         { EditorUtility.DisplayDialog("エラー", "複製先が複製元の子フォルダになっています", "OK"); return; }
 
-        var texMap = new Dictionary<string, string>();
+        var texMap = new Dictionary<string, string>(); // srcPath → dstPath
         int copiedTex = 0, skippedTex = 0;
 
+        // Phase 1: テクスチャをコピー
         string[] texGuids = AssetDatabase.FindAssets("t:Texture", new[] { srcRoot });
         foreach (string guid in texGuids)
         {
@@ -251,11 +252,22 @@ public class FolderDuplicator : EditorWindow
             { Log("ERROR [Tex] " + srcPath); }
         }
 
+        // テクスチャのインポート完了を待つ
         AssetDatabase.Refresh();
 
-        // Phase 2: マテリアルをコピー（再アサインは後で行う）
+        // テクスチャのGUIDマップを構築: srcGUID → dstGUID
+        var guidMap = new Dictionary<string, string>();
+        foreach (var kv in texMap)
+        {
+            string srcGuid = AssetDatabase.AssetPathToGUID(kv.Key);
+            string dstGuid = AssetDatabase.AssetPathToGUID(kv.Value);
+            if (!string.IsNullOrEmpty(srcGuid) && !string.IsNullOrEmpty(dstGuid) && srcGuid != dstGuid)
+                guidMap[srcGuid] = dstGuid;
+        }
+        Log(string.Format("GUIDマップ: {0} 件", guidMap.Count));
+
+        // Phase 2: マテリアルをコピーしてGUIDを直接置換
         int copiedMat = 0, skippedMat = 0;
-        var matPairs = new List<(string srcPath, string dstPath)>();
 
         string[] matGuids = AssetDatabase.FindAssets("t:Material", new[] { srcRoot });
         foreach (string guid in matGuids)
@@ -267,53 +279,38 @@ public class FolderDuplicator : EditorWindow
             EnsureFolderExists(Path.GetDirectoryName(dstPath).Replace("\\", "/"));
 
             if (AssetDatabase.LoadAssetAtPath<Object>(dstPath) != null)
-            { Log("SKIP  [Mat] " + Path.GetFileName(dstPath)); skippedMat++; }
-            else if (AssetDatabase.CopyAsset(srcPath, dstPath))
-            { Log("OK    [Mat] " + Path.GetFileName(dstPath)); copiedMat++; }
-            else
+            { Log("SKIP  [Mat] " + Path.GetFileName(dstPath)); skippedMat++; continue; }
+
+            if (!AssetDatabase.CopyAsset(srcPath, dstPath))
             { Log("ERROR [Mat] " + srcPath); continue; }
 
-            matPairs.Add((srcPath, dstPath));
+            Log("OK    [Mat] " + Path.GetFileName(dstPath));
+            copiedMat++;
+
+            // コピーした .mat ファイルのテクスチャGUIDを複製先GUIDで直接置換
+            if (guidMap.Count > 0)
+            {
+                string absPath = Application.dataPath + dstPath.Substring("Assets".Length);
+                if (File.Exists(absPath))
+                {
+                    string text = File.ReadAllText(absPath);
+                    string replaced = text;
+                    foreach (var kv in guidMap)
+                        replaced = replaced.Replace("guid: " + kv.Key, "guid: " + kv.Value);
+                    if (replaced != text)
+                        File.WriteAllText(absPath, replaced);
+                }
+            }
         }
 
-        // コピー済みマテリアルが全てインポートされてから再アサイン
         AssetDatabase.Refresh();
-
-        // Phase 3: テクスチャ再アサイン
-        foreach (var (srcPath, dstPath) in matPairs)
-        {
-            var srcMat = AssetDatabase.LoadAssetAtPath<Material>(srcPath);
-            var dstMat = AssetDatabase.LoadAssetAtPath<Material>(dstPath);
-            if (srcMat != null && dstMat != null)
-                ReassignTextures(dstMat, srcMat, texMap);
-        }
-
         AssetDatabase.SaveAssets();
-        AssetDatabase.Refresh();
 
         string summary = string.Format(
             "完了：テクスチャ {0} 件複製 / {1} 件スキップ、マテリアル {2} 件複製 / {3} 件スキップ",
             copiedTex, skippedTex, copiedMat, skippedMat);
         Log(summary);
         EditorUtility.DisplayDialog("完了", summary, "OK");
-    }
-
-    private void ReassignTextures(Material dstMat, Material srcMat, Dictionary<string, string> map)
-    {
-        bool changed = false;
-        foreach (string prop in srcMat.GetTexturePropertyNames())
-        {
-            Texture tex = srcMat.GetTexture(prop);
-            if (tex == null) continue;
-            string srcTexPath = AssetDatabase.GetAssetPath(tex);
-            if (string.IsNullOrEmpty(srcTexPath)) continue;
-            if (map.TryGetValue(srcTexPath, out string dstTexPath))
-            {
-                Texture newTex = AssetDatabase.LoadAssetAtPath<Texture>(dstTexPath);
-                if (newTex != null) { dstMat.SetTexture(prop, newTex); changed = true; }
-            }
-        }
-        if (changed) EditorUtility.SetDirty(dstMat);
     }
 
     private static string ToDstPath(string srcPath, string srcRoot, string dstRoot)
