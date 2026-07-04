@@ -251,6 +251,8 @@ public class FolderDuplicator : EditorWindow
             { Log("ERROR [Tex] " + srcPath); }
         }
 
+        AssetDatabase.Refresh();
+
         int copiedMat = 0, skippedMat = 0;
 
         string[] matGuids = AssetDatabase.FindAssets("t:Material", new[] { srcRoot });
