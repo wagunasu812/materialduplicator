@@ -253,35 +253,39 @@ public class FolderDuplicator : EditorWindow
 
         AssetDatabase.Refresh();
 
+        // Phase 2: マテリアルをコピー（再アサインは後で行う）
         int copiedMat = 0, skippedMat = 0;
+        var matPairs = new List<(string srcPath, string dstPath)>();
 
         string[] matGuids = AssetDatabase.FindAssets("t:Material", new[] { srcRoot });
         foreach (string guid in matGuids)
         {
             string srcPath = AssetDatabase.GUIDToAssetPath(guid);
-            var    srcMat  = AssetDatabase.LoadAssetAtPath<Material>(srcPath);
-            if (srcMat == null) continue;
+            if (AssetDatabase.LoadAssetAtPath<Material>(srcPath) == null) continue;
 
-            string   dstPath = ToDstPath(srcPath, srcRoot, dstRoot);
+            string dstPath = ToDstPath(srcPath, srcRoot, dstRoot);
             EnsureFolderExists(Path.GetDirectoryName(dstPath).Replace("\\", "/"));
 
-            Material dstMat;
             if (AssetDatabase.LoadAssetAtPath<Object>(dstPath) != null)
-            {
-                Log("SKIP  [Mat] " + Path.GetFileName(dstPath));
-                skippedMat++;
-                dstMat = AssetDatabase.LoadAssetAtPath<Material>(dstPath);
-            }
+            { Log("SKIP  [Mat] " + Path.GetFileName(dstPath)); skippedMat++; }
             else if (AssetDatabase.CopyAsset(srcPath, dstPath))
-            {
-                Log("OK    [Mat] " + Path.GetFileName(dstPath));
-                copiedMat++;
-                dstMat = AssetDatabase.LoadAssetAtPath<Material>(dstPath);
-            }
+            { Log("OK    [Mat] " + Path.GetFileName(dstPath)); copiedMat++; }
             else
             { Log("ERROR [Mat] " + srcPath); continue; }
 
-            if (dstMat != null) ReassignTextures(dstMat, srcMat, texMap);
+            matPairs.Add((srcPath, dstPath));
+        }
+
+        // コピー済みマテリアルが全てインポートされてから再アサイン
+        AssetDatabase.Refresh();
+
+        // Phase 3: テクスチャ再アサイン
+        foreach (var (srcPath, dstPath) in matPairs)
+        {
+            var srcMat = AssetDatabase.LoadAssetAtPath<Material>(srcPath);
+            var dstMat = AssetDatabase.LoadAssetAtPath<Material>(dstPath);
+            if (srcMat != null && dstMat != null)
+                ReassignTextures(dstMat, srcMat, texMap);
         }
 
         AssetDatabase.SaveAssets();
