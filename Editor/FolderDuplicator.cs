@@ -10,7 +10,7 @@ namespace MaterialDuplicatorTool
 
 public class FolderDuplicator : EditorWindow
 {
-    private const string Version = "1.1.3";
+    private const string Version = "1.1.4";
 
     private DefaultAsset sourceFolderAsset;
 
@@ -273,6 +273,7 @@ public class FolderDuplicator : EditorWindow
         foreach (string guid in matGuids)
         {
             string srcPath = AssetDatabase.GUIDToAssetPath(guid);
+            if (!srcPath.EndsWith(".mat", System.StringComparison.OrdinalIgnoreCase)) continue;
             if (AssetDatabase.LoadAssetAtPath<Material>(srcPath) == null) continue;
 
             string dstPath = ToDstPath(srcPath, srcRoot, dstRoot);
