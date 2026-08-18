@@ -11,7 +11,7 @@ namespace MaterialDuplicatorTool
 public class MaterialDuplicator : EditorWindow
 {
     // ─ バージョン ─────────────────────────────────────────
-    private const string Version      = "1.0.0";
+    private const string Version      = "1.2.0";
     private const string PrefsKey     = "com.MaterialDuplicatorTool.presets_v1";
 
     // ─ データ ────────────────────────────────────────────
